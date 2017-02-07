@@ -1,4 +1,4 @@
-Hospital_ID,Region_ID,District_ID,Instrument_ID,Month 1,Month 2,Month 3,Month 4,Month 5,Month 6,Month 7,Month 8,Month 9,Month 10,Month 11,Month 12,Year Total
+Hospital_ID,Region_ID,District_ID,Instrument_ID,Month_1,Month_2,Month_3,Month_4,Month_5,Month_6,Month_7,Month_8,Month_9,Month_10,Month_11,Month_12,Year_Total
 Hospital 1,Region 1,District 12,Instrument 2,8534,9917,7825,11702,8776,7755,9289,7796,7595,8292,7787,8282,103550
 Hospital 1,Region 1,District 12,Instrument 3,298,298,214,311,261,223,237,171,173,183,193,0,2562
 Hospital 1,Region 1,District 13,Instrument 1,37,40,38,43,29,0,0,0,0,0,0,0,187
