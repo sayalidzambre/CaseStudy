@@ -1,0 +1,3 @@
+"Variable" "Description"
+"Activity" "The motion activity"
+"Subject.Id" "The subject identifier"
