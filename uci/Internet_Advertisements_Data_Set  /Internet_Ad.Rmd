@@ -38,28 +38,19 @@ trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 ```{r}
 data[11,]
 ```
-
-```{r}
-#summary(data$X0)
-class(data)
-unique(data$X0)
-
-```
-
-```{r}
-summary(data$X0)
-
-```
+There are missing values in data.
 
 ```{r}
 data$X0 <- as.numeric(as.character(data$X0))
 data$X1 <- as.numeric(as.character(data$X1))
 data$X2 <- as.numeric(as.character(data$X2))
 data$X3 <- as.numeric(as.character(data$X3))
-#data$X0[trim(data$X0) =='?'] <- NA
-data[11,]
+#data$X0[trim(dataX0) =='?'] <- NA
+
 
 ```
+
+
 
 ```{r}
 data <- na.omit(data)
@@ -77,18 +68,20 @@ data$aspect = as.numeric(data$aspect)
 
 ```
 
-```{r}
-
-```
 
 ```{r}
 cols = c(4:1558);    
-data[,cols] = apply(data[,cols], 2, function(x) as.factor(x));
+data[,cols] <- apply(data[,cols], 2, function(x) factor(x));
 
 ```
 
 ```{r}
-is.factor(data$X6)
+class(data$X6)
+data[11,]
+```
+
+```{r}
+unique(data$X29)
 ```
 
 ```{r}
@@ -113,12 +106,29 @@ corrplot(correlations, method="square", order="hclust")
 
 ggplot(data, aes(x=height)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
 ```
+##### height seems to be left skewed. 
+
+#### apply log transformation
+```{r}
+data$height <- log(data$height)
+ggplot(data, aes(x=height)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
+```
 
 ```{r}
 ggplot(data, aes(x=width)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
 ```
 
 ```{r}
+data$width <- sqrt(data$width)
+ggplot(data, aes(x=width)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
+```
+
+```{r}
+ggplot(data, aes(x=aspect)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
+```
+
+```{r}
+data$aspect <- log10(data$aspect)
 ggplot(data, aes(x=aspect)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
 ```
 
@@ -213,19 +223,21 @@ pred.tree.both <- predict(tree.both, newdata = test_data)
 
 ```
 
+
+
 ```{r}
-accuracy.meas(test_data$class, pred.tree.rose[,2])
+accuracy.meas(test_data$class, pred.tree.rose[,1])
 ```
 
 ```{r}
-accuracy.meas(test_data$class, pred.tree.over[,2])
+accuracy.meas(test_data$class, pred.tree.over[,1])
 ```
 
 ```{r}
-accuracy.meas(test_data$class, pred.tree.under[,2])
+accuracy.meas(test_data$class, pred.tree.under[,1])
 ```
 
 ```{r}
-accuracy.meas(test_data$class, pred.tree.both[,2])
+accuracy.meas(test_data$class, pred.tree.both[,1])
 ```
 
