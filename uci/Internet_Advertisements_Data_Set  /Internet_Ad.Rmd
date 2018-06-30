@@ -1,0 +1,231 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+```{r}
+library(readr)
+library(dplyr)
+
+library(data.table)
+library(corrplot)
+library(GGally)
+library(ggplot2)
+library(e1071)
+library(reshape)
+library(caret)
+library(ROSE)
+```
+
+```{r}
+data <- read.csv("add.csv", row.names = 1)
+cat("Total number of rows and columns", dim(data))
+```
+
+```{r}
+# returns string w/o leading or trailing whitespace
+trim <- function (x) gsub("^\\s+|\\s+$", "", x)
+```
+
+```{r}
+data[11,]
+```
+
+```{r}
+#summary(data$X0)
+class(data)
+unique(data$X0)
+
+```
+
+```{r}
+summary(data$X0)
+
+```
+
+```{r}
+data$X0 <- as.numeric(as.character(data$X0))
+data$X1 <- as.numeric(as.character(data$X1))
+data$X2 <- as.numeric(as.character(data$X2))
+data$X3 <- as.numeric(as.character(data$X3))
+#data$X0[trim(data$X0) =='?'] <- NA
+data[11,]
+
+```
+
+```{r}
+data <- na.omit(data)
+cat("Total number of rows and columns after removing unknown data", dim(data))
+```
+
+```{r}
+colnames(data)[1] <- "height"
+colnames(data)[2] <- "width"
+colnames(data)[3] <- "aspect"
+colnames(data)[1559] <- "class"
+data$height = as.numeric(data$height)
+data$width = as.numeric(data$width)
+data$aspect = as.numeric(data$aspect)
+
+```
+
+```{r}
+
+```
+
+```{r}
+cols = c(4:1558);    
+data[,cols] = apply(data[,cols], 2, function(x) as.factor(x));
+
+```
+
+```{r}
+is.factor(data$X6)
+```
+
+```{r}
+which(rowSums(is.na(data))==ncol(data))
+```
+
+```{r}
+summary(data$class)
+```
+
+```{r}
+num_var = c("height", "width", "aspect")
+dt_train_num <- data[,num_var]
+```
+
+```{r}
+correlations <- cor(dt_train_num)
+corrplot(correlations, method="square", order="hclust")
+```
+
+```{r}
+
+ggplot(data, aes(x=height)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
+```
+
+```{r}
+ggplot(data, aes(x=width)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
+```
+
+```{r}
+ggplot(data, aes(x=aspect)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
+```
+
+
+
+Stratified Sampling
+```{r}
+data$class = as.factor(data$class)
+is.factor(data$class)
+summary(data$class)
+```
+It seems to be imbalanced class problem, we need to work on stratified sampling.
+```{r}
+set.seed(42)
+index <- createDataPartition(data$class, p = 0.8, list = FALSE)
+train_data <- data[index, ]
+test_data  <- data[-index, ]
+```
+
+```{r}
+cat('size of train data', dim(train_data))
+cat('\nsize of test data', dim(test_data))
+cat('\nSummary of train class', summary(train_data$class))
+```
+
+```{r}
+cat('% of class distribution')
+#check classes distribution
+prop.table(table(train_data$class))
+```
+
+
+As we see there are only 14% ad and 85% nonad class in train data, This is imbalanced data.
+```{r}
+library(rpart)
+
+treeimb <- rpart(class ~ ., data = train_data)
+pred.class <- predict(treeimb, newdata = test_data)
+
+```
+
+```{r}
+accuracy.meas(test_data$class, pred.class[,2])
+
+```
+
+```{r}
+roc.curve(test_data$class, pred.class[,2], plotit = F)
+
+```
+
+
+
+# We’ll use the sampling techniques and try to improve this prediction accuracy.
+```{r}
+data_balanced_over <- ovun.sample(class ~ ., data = train_data, method = "over",N = 3166)$data
+table(data_balanced_over$class)
+```
+
+```{r}
+data_balanced_under <- ovun.sample(class ~ ., data = train_data, method = "under", N = 610, seed = 1)$data
+table(data_balanced_under$class)
+```
+
+```{r}
+data_balanced_both <- ovun.sample(class ~ ., data = train_data, method = "both", p=0.5, N=1200, seed = 1)$data
+table(data_balanced_both$class)
+```
+
+```{r}
+data.rose <- ROSE(class ~ ., data = train_data, seed = 1)$data
+table(data.rose$class)
+```
+
+```{r}
+
+tree.rose <- rpart(class ~ ., data = data.rose)
+tree.over <- rpart(class ~ ., data = data_balanced_over)
+tree.under <- rpart(class ~ ., data = data_balanced_under)
+tree.both <- rpart(class ~ ., data = data_balanced_both)
+
+
+```
+
+```{r}
+
+#make predictions on unseen data
+pred.tree.rose <- predict(tree.rose, newdata = test_data)
+pred.tree.over <- predict(tree.over, newdata = test_data)
+pred.tree.under <- predict(tree.under, newdata = test_data)
+pred.tree.both <- predict(tree.both, newdata = test_data)
+
+```
+
+```{r}
+accuracy.meas(test_data$class, pred.tree.rose[,2])
+```
+
+```{r}
+accuracy.meas(test_data$class, pred.tree.over[,2])
+```
+
+```{r}
+accuracy.meas(test_data$class, pred.tree.under[,2])
+```
+
+```{r}
+accuracy.meas(test_data$class, pred.tree.both[,2])
+```
+
