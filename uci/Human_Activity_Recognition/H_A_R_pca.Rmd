@@ -16,18 +16,31 @@ The experiments have been carried out with a group of 30 volunteers within an ag
 For each record in the dataset the following is provided:
 
 Triaxial acceleration from the accelerometer (total acceleration) and the estimated body acceleration.
+
 Triaxial Angular velocity from the gyroscope.
+
 A 561-feature vector with time and frequency domain variables.
+
 Its activity label.
+
 An identifier of the subject who carried out the experiment.
+
+
 ```{r}
 library(readr)
 library(dplyr)     # For pipe operations
 library(glmnet)    # For Lasso
-library(e1071)   # for SVM
-require(caret)
+library(e1071)     # for SVM
+library(caret)     # Confusion Matrix
+library(ggplot2)   # graphs and plots
+library(corrplot)
 ```
 
+
+### Read Data
+1. Activity Id and Labels (WALKING, WALKING_UPSTAIRS, WALKING_DOWNSTAIRS, SITTING, STANDING, LAYING)
+
+2. Column Headers
 ```{r}
 activities = read.table("./activity_labels.txt", sep = "", col.names = c("Id", "activity"))
 activityLabels = as.character(activities$activity)
@@ -39,6 +52,8 @@ attributeNames = features$feature
 cat("Total no of features - ", length(attributeNames))
 ```
 
+
+3. Train Data
 ```{r}
 train_X = read.table("./train/X_train.txt", sep="", col.names=attributeNames)
 train_y <- read.table("./train/y_train.txt", sep="\n")
@@ -49,126 +64,260 @@ levels(train_y$Activity) = activityLabels
 trainSubjects = read.table("./train/subject_train.txt", sep = "")
 names(trainSubjects) = "subject"
 #trainSubjects$subject = as.factor(trainSubjects$subject)
-
 train <- cbind(train_X, trainSubjects, train_y)
 train_labels <- train$Activity
 rm(train_X, train_y)
-dim(train)
+cat('size of train data ' ,dim(train))
 ```
 
+
+4. Test Data
 ```{r}
-test_X = read.table("./test/X_test.txt", sep="", col.names=attributeNames)
+test_X <- read.table("./test/X_test.txt", sep="", col.names=attributeNames)
 test_y <- read.table("./test/y_test.txt", sep="\n")
 names(test_y) = "Activity"
-
 test_y$Activity = as.factor(test_y$Activity)
 levels(test_y$Activity) = activityLabels
 testSubjects = read.table("./test/subject_test.txt", sep = "")
 names(testSubjects) = "subject"
 #testSubjects$subject = as.factor(testSubjects$subject)
-
-#combined features and acitvity
 test <- cbind(test_X, testSubjects, test_y)
 rm(test_X, test_y)
-dim(test)
+cat('size of test data ' , dim(test))
 ```
 
+
+#### Identify types of variables.
 ```{r}
 cat_var <- names(train)[which(sapply(train, is.factor))]
 num_var <- names(train)[which(sapply(train, is.numeric))]
-length(num_var)
-length(cat_var)
+cat('Total no of Numerical variables are -',length(num_var))
+cat('\nTotal no of Categorical variables are -',length(cat_var))
 cat('categorical variables are -', cat_var)
 ```
 
+
+#### How Activity Variable looks like? -
 ```{r}
 head(train$Activity)
 ```
 
+
+
+#### Check for NA values in Data
 ```{r}
 data<-rbind(train,test)
 cat('does na value exists')
 which(rowSums(is.na(data))==ncol(data))
 ```
+It seems there are no NA values in data
+
+### Data Exploration
+#### How many activities performed by each Subject?
 
 ```{r}
-nameVec <- make.names(names(data),unique=TRUE)
-names(data) <- nameVec
+train$Partition <- 'Train'
+test$Partition <- 'Test'
+all <- rbind(train, test)
+all$subject = as.factor(all$subject)
+all$Partition = as.factor(all$Partition)
+train <- subset(train, select = -c(Partition))
+test <- subset(test, select = -c(Partition))
+all$subject = as.factor(all$subject)
+qplot(data = all , x = subject, fill = Activity)
+```
+#### All classess seems to be equally distributed, which implies this is not a imbalanced classification problem.
 
+
+
+
+##### Creating readable variable names - 
+```{r}
+colnames(all) <- gsub("mean", ".Mean.", colnames(all))
+colnames(all) <- gsub("std", ".Std.", colnames(all))
+colnames(all) <- gsub("^t", "Time.", colnames(all))
+colnames(all) <- gsub("\\.t", ".Time.", colnames(all))
+colnames(all) <- gsub("^f", "Frequency.", colnames(all))
+colnames(all) <- gsub("\\.f", ".Frequency.", colnames(all))
+colnames(all) <- gsub("\\(\\)", "", colnames(all))
+colnames(all) <- gsub("-", "", colnames(all))
+colnames(all) <- gsub("\\.\\.", ".", colnames(all))
+colnames(all) <- gsub("\\.\\.", ".", colnames(all))
+colnames(all) <- gsub("\\.$", "", colnames(all))
+colnames(all) <- gsub("BodyBody", "Body.", colnames(all))
+colnames(all) <- gsub("^angle\\.", "Angle.", colnames(all))
+colnames(all) <- gsub("Gyro", ".Gyro", colnames(all))
+colnames(all) <- gsub("Acc", ".Acc", colnames(all))
+colnames(all) <- gsub("Jerk", ".Jerk", colnames(all))
+colnames(all) <- gsub("Mag", ".Mag", colnames(all))
+#colnames(all) <- gsub("^", "MeanOf.", colnames(all))
+colnames(all) <- gsub("(^|[\\.])([[:alpha:]])", "\\1\\U\\2", colnames(all), perl=TRUE)
+colnames(all)[c(1:10, 560:564)]
+```
+
+
+#### Lets check density of Time of Accleration Mean against X, Y and Z axis
+```{r}
+ggplot(all, aes(x=Time.Body.Acc.Mean.X)) + geom_density(aes(group=Activity, colour=Activity, fill=Activity), alpha=0.3)
+```
+
+```{r}
+ggplot(all, aes(x=Time.Body.Acc.Mean.Y)) + geom_density(aes(group=Activity, colour=Activity, fill=Activity), alpha=0.3)
+```
+
+```{r}
+ggplot(all, aes(x=Time.Body.Acc.Mean.Z)) + geom_density(aes(group=Activity, colour=Activity, fill=Activity), alpha=0.3)
+```
+##### Time of mean of Accelaration seems to be normally distributed.
+
+
+#### Let's plot Std against X, Y Z co-ordonates
+```{r}
+ggplot(all, aes(x=Time.Body.Acc.Std.X)) + geom_density(aes(group=Activity, colour=Activity, fill=Activity), alpha=0.3)
+```
+
+```{r}
+ggplot(all, aes(x=Time.Body.Acc.Std.Y)) + geom_density(aes(group=Activity, colour=Activity, fill=Activity), alpha=0.3)
+```
+
+```{r}
+ggplot(all, aes(x=Time.Body.Acc.Std.Z)) + geom_density(aes(group=Activity, colour=Activity, fill=Activity), alpha=0.3)
+```
+
+
+#### In general, while Walking on straigth surface or Stair Case, Time deviation is high
+
+##### Lets’ plot corleation between Time Mean and Time std.
+```{r}
+corr_data = all[,1:12]
+correlations <- cor(corr_data)
+corrplot(correlations, method="square", order="hclust")
+```
+#### Here we only ploted first 12 variables, many variables are highly correlated.
+
+
+#### Thus working on high dimentions (561 independent variables) will be time consuming, Lets' apply Dimention Reduction Techniques -  
+### PCA or Lasso
+
+
+Applying nameing transformation to entire dataset
+```{r}
+nameVector <- make.names(names(data),unique=TRUE)
+names(data) <- nameVector
 dim(data)
 
 ```
 
+
+Test - Train split again
 ```{r}
 train <- data[1:7352,]
 test <- data[-c(1:7352),]
 dim(train)
 ```
 
+## Principal Component Analysis ( PCA)
+#####Data has high dimentions (561), All of them might not be important features, we can use PCA to reduce dimention of data.
+
+#### PCA will help us create Pricincipal components which will cover maximum variance with less number of features.
+
 
 ```{r}
-pc <- prcomp(train[,-c(563)], center=TRUE, scale=TRUE)
-pc.var <- pc$sdev^2
-pc.pvar <- pc.var/sum(pc.var)
+pca <- prcomp(train[,-c(563)], center=TRUE, scale=TRUE)
+#Calculate Variance covered by each Principal Component.
+pca.variance <- pca$sdev^2
+# Canculate Percentage Variance
+pca.pervarriance <- pca.variance / sum(pca.variance)
 ```
 
+
+#### As all of them are numerical variables, alternative to this is -
+
+1. to check correlation between independent variables.
+
+2. Plot scatter plot between all Independent Variables.
+
+3. Remove highly colinear variables.
+
+#### Plot How much % of variance is covered by each Principal Component
 ```{r}
-plot(cumsum(pc.pvar),xlab="No. of Principal component", ylab="Cumulative % of variance explained",type='b',main="Principal Components' Variance %",col="blue")
+plot(pca.pervarriance,
+     xlab="No. of Principal component", 
+     ylab="% of variance explained",
+     type='b',
+     main="Principal Components' Variance %",col="blue")
+```
+
+First Principal Component explains around 50% variance of actual data
+
+
+#### Let’s plot cumulative Addition of variance and check how many components cover 98% of variance.
+```{r}
+plot(cumsum(pca.pervarriance),
+     xlab="No. of Principal component", 
+     ylab="Cumulative % of variance explained",
+     type='b',main="Principal Components' Variance %",col="blue")
 abline(h=0.98)
 abline(v=150)
 ```
 
-```{r}
-train.data<-data.frame(activity=train$Activity,pc$x)
-train.data<-train.data[,1:100]
-```
+First 150 Pincipal Components cover 98% of variance of data and First 100 Components cover 95% of variance of data
+
+We can try various permutaions using K-fold 
+
+#### Create train set from first 100 pca components.
+
+
 
 ```{r}
+train.data <- data.frame(activity=train$Activity, pca$x)
+train.data <- train.data[,1:101]
 dim(train.data)
 ```
 
+
+```{r}
+train.data[1,]
+```
+
+
+##### Apply basic SVM model on PCA data. As we have multiple Target Variables problem, we will try SVM
 ```{r}
 svm_model <- svm(activity ~ ., data=train.data)
+svm_model
 ```
+#### Total number of Support vectors for 100 dimentions are 4222
 
+##### Predict PCA components for test data as well - Pick first 100 Principal Components of Test data.
 ```{r}
-test.data <- predict(pc,newdata=test)
+test.data <- predict(pca, newdata=test)
 test.data <- as.data.frame(test.data)
 test.data <- test.data[,1:100]
+test_actual <- test$Activity
 ```
 
+
+##### Predict Values for basic SVM
+
+Create Confusion Matrix
 ```{r}
-result<-predict(svm_model,test.data,type="class")
+test_pred <- predict(svm_model, test.data, type="class")
+confusionMatrix(test_pred, test_actual)
 ```
 
-```{r}
-#Generating Confusion Matrix
-test.data$Activity <- test$Activity
-references <- test.data$Activity
-t<-table(references, result)
-t
-```
+##### Accuracy of Basic Non Linear Kernal’s Model is 93.62%
 
-```{r}
-acc = sum(references == result) / length(references)
-cat(paste0("Accuracy for test dataset is: ", acc*100 ," %"))
-```
+#### Training the SVM model with different HyperParameter
 
-```{r}
-
-confusionMatrix(references, result)
-```
-
-```{r}
-
-```
-### Training the SVM model
 Caret package provides train() method for training our data for various algorithms. We just need to pass different parameter values for different algorithms. Before train() method, we will first use trainControl() method. It controls the computational nuances of the train() method.
+
+#### Let’s try linear Kernal -
+
+
 ```{r}
 
 trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 set.seed(3233)
-
 svm_Linear <- train(activity ~., data = train.data, method = "svmLinear",
                  trControl=trctrl,
                  preProcess = c("center", "scale"),
@@ -180,18 +329,16 @@ svm_Linear
 ```
 
 ```{r}
-
 test_pred <- predict(svm_Linear, newdata = test.data)
-confusionMatrix(test_pred, result )
+confusionMatrix(test_pred, test_actual )
 
 ```
 
+##### Lets try to change C hyper Tuning Parameter with linear Kernal, using Grid CV
+
+Change in C will define how much miss-classfication too allow. High C value might tend to Overfitting
+
 ```{r}
-
-```
-
-```{r}
-
 
 grid <- expand.grid(C = c(0,0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2,5))
 set.seed(3233)
@@ -210,7 +357,6 @@ plot(svm_Linear_Grid)
 ```
 
 ```{r}
-
 test_pred_grid <- predict(svm_Linear_Grid, newdata = test.data)
 
 test_pred_grid
@@ -218,12 +364,13 @@ test_pred_grid
 ```
 
 ```{r}
-confusionMatrix(test_pred_grid, result )
+confusionMatrix(test_pred_grid, test_actual )
 
 ```
-SVM Classifier using Non-Linear Kernel
+
+#### SVM with Non Linear Kernal
 ```{r}
-set.seed(3233)
+et.seed(3233)
 svm_Radial <- train(activity ~., data = train.data, method = "svmRadial",
   trControl=trctrl,
   preProcess = c("center", "scale"),
@@ -237,15 +384,11 @@ plot(svm_Radial)
 ```
 
 ```{r}
-
 test_pred_Radial <- predict(svm_Radial, newdata = test.data)
-confusionMatrix(test_pred_Radial, result )
+confusionMatrix(test_pred_Radial, test_actual )
 ```
 
-```{r}
-
-```
-
+##### HyperParameter tuning for non linear kernal using K fold
 ```{r}
 
 
@@ -265,10 +408,15 @@ plot(svm_Radial_Grid)
 ```{r}
 test_pred_Radial_Grid <- predict(svm_Radial_Grid, newdata = test.data)
 
-confusionMatrix(test_pred_Radial_Grid, result )
+confusionMatrix(test_pred_Radial_Grid, test_actual )
 ```
 
-```{r}
+## Lasso Regression - Classification
 
-```
+### Lasso Feature Selection
+
+With 561 features, it’s important to reduce the feature-set to avoid overfitting and to create a sensical model. The more features you have, the easier it is to create a model that trains well, but may not do so well with test data. To learn more about these problems, checkout the bias-variance trade-off and the curse of dimensionality. Lasso selection works by reducing the coefficients of certain features towards (and exactly) 0. The higher the lambda, the faster this will happen. A sufficiently high lamba would set all features to 0, meaning only the coefficient will be used in the model (a simple mean, for example, in regression).
+
+# To be Continued….
+### This is not the end, accuracy of model can be improved by trying different types of model and hyperparameter tuning, with different classification algorithms.
 
