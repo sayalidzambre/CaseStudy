@@ -1,20 +1,24 @@
 ---
-title: "R Notebook"
+title: "Internet Advertisements"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+### Data Set Information:
+This dataset represents a set of possible advertisements on Internet pages. The features encode the geometry of the image (if available) as well as phrases occuring in the URL, the image’s URL and alt text, the anchor text, and words occuring near the anchor text. The task is to predict whether an image is an advertisement (“ad”) or not (“nonad”).
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+### Attribute Information:
+There are 3 continuous attributes(height,width,aspect ratio) -28% data is missing for each continuous attribute
 
+Others are Binary
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+### Context
+The task is to predict whether an image is an advertisement (“ad”) or not (“nonad”).
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+### Content
+There are 1559 columns in the data.Each row in the data represent one image which is tagged as ad or nonad in the last column.column 0 to 1557 represent the actual numerical attributes of the images
 ```{r}
 library(readr)
 library(dplyr)
-
 library(data.table)
 library(corrplot)
 library(GGally)
@@ -25,20 +29,28 @@ library(caret)
 library(ROSE)
 ```
 
+
+#### 1. Read Data
 ```{r}
 data <- read.csv("add.csv", row.names = 1)
 cat("Total number of rows and columns", dim(data))
 ```
+
+
+Function to trim leading and trailing whitespace
 
 ```{r}
 # returns string w/o leading or trailing whitespace
 trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 ```
 
+Printing 11th row of data
 ```{r}
 data[11,]
 ```
-There are missing values in data.
+There are some missing values in data, which are not marked as NA.
+
+Convert Data type of height, width and aspect ratio columns to Numeric as they are contineous variables
 
 ```{r}
 data$X0 <- as.numeric(as.character(data$X0))
@@ -50,7 +62,7 @@ data$X3 <- as.numeric(as.character(data$X3))
 
 ```
 
-
+#### Remove NA value rows from data. These values can be imputed as well.
 
 ```{r}
 data <- na.omit(data)
@@ -70,20 +82,12 @@ data$aspect = as.numeric(data$aspect)
 
 
 ```{r}
-cols = c(4:1558);    
-data[,cols] <- apply(data[,cols], 2, function(x) factor(x));
-
-```
-
-```{r}
 class(data$X6)
 data[11,]
 ```
 
-```{r}
-unique(data$X29)
-```
 
+##### Verify Still any NA value is remaining
 ```{r}
 which(rowSums(is.na(data))==ncol(data))
 ```
@@ -97,11 +101,15 @@ num_var = c("height", "width", "aspect")
 dt_train_num <- data[,num_var]
 ```
 
+#### Correlation Plot
 ```{r}
 correlations <- cor(dt_train_num)
 corrplot(correlations, method="square", order="hclust")
 ```
+##### Independent variables are not highly correlated.
 
+### Density Plots
+#### Plot Height
 ```{r}
 
 ggplot(data, aes(x=height)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
@@ -114,19 +122,27 @@ data$height <- log(data$height)
 ggplot(data, aes(x=height)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
 ```
 
+#### Plot Width
 ```{r}
 ggplot(data, aes(x=width)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
 ```
 
+
+##### apply sqrt transformation
 ```{r}
 data$width <- sqrt(data$width)
 ggplot(data, aes(x=width)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
 ```
 
+#### Plot Aspect Ratio
 ```{r}
 ggplot(data, aes(x=aspect)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
 ```
+##### aspect ration seems to be right skewed. Also there is outlier
 
+To treat outlier boxplot can also be plot.
+
+#### apply log transformation on height
 ```{r}
 data$aspect <- log10(data$aspect)
 ggplot(data, aes(x=aspect)) + geom_density(aes(group=class, colour=class, fill=class), alpha=0.3)
@@ -134,7 +150,7 @@ ggplot(data, aes(x=aspect)) + geom_density(aes(group=class, colour=class, fill=c
 
 
 
-Stratified Sampling
+#### Stratified Sampling
 ```{r}
 data$class = as.factor(data$class)
 is.factor(data$class)
@@ -154,14 +170,16 @@ cat('\nsize of test data', dim(test_data))
 cat('\nSummary of train class', summary(train_data$class))
 ```
 
+#### This seems to be imbalanced class problem, we need to work on stratified sampling.
 ```{r}
 cat('% of class distribution')
 #check classes distribution
 prop.table(table(train_data$class))
 ```
-
-
 As we see there are only 14% ad and 85% nonad class in train data, This is imbalanced data.
+
+
+Tried Basic Decision Tree algorithm as data is imbalanced, and not sure if it is linearly seperable
 ```{r}
 library(rpart)
 
@@ -182,26 +200,49 @@ roc.curve(test_data$class, pred.class[,2], plotit = F)
 
 
 
-# We’ll use the sampling techniques and try to improve this prediction accuracy.
+#####We’ll use the sampling techniques and try to improve this prediction accuracy.
+
+#### Over sampling
+
+This method over instructs the algorithm to perform oversampling. As the original dataset had 1583 good observations, this method is used to oversample minority class until it reaches 1583. The dataset has a total of 454K samples. This can be attained using method = “over”.
 ```{r}
 data_balanced_over <- ovun.sample(class ~ ., data = train_data, method = "over",N = 3166)$data
 table(data_balanced_over$class)
 ```
 
+
+### Under Sampling
+
+This method functions similar to the oversampling method and is done without replacement. In this method, good transactions are equal to fraud transactions. Hence, no significant information can be obtained from this sample. This can be attained using method = “under”.
 ```{r}
 data_balanced_under <- ovun.sample(class ~ ., data = train_data, method = "under", N = 610, seed = 1)$data
 table(data_balanced_under$class)
 ```
 
+### Both Sampling
+
+This method is a combination of both oversampling and undersampling methods. Using this method, the majority class is undersampled without replacement and the minority class is oversampled with replacement. This can be attained using method = “both”.
 ```{r}
 data_balanced_both <- ovun.sample(class ~ ., data = train_data, method = "both", p=0.5, N=1200, seed = 1)$data
 table(data_balanced_both$class)
 ```
 
+
+### Synthetic Minority Over-Sampling Technique (SMOTE) Sampling (ROSE Sampling)
+
+ROSE sampling method generates data synthetically and provides a better estimate of original data.
+
+This method is used to avoid overfitting when adding exact replicas of minority instances to the main dataset.
+
+For example, a subset of data from the minority class is taken. New synthetic similar instances are created and added to the original dataset.
+
+
 ```{r}
 data.rose <- ROSE(class ~ ., data = train_data, seed = 1)$data
 table(data.rose$class)
 ```
+Apply simple Decision Tree Algorithm for different sampling techniques
+
 
 ```{r}
 
@@ -212,7 +253,7 @@ tree.both <- rpart(class ~ ., data = data_balanced_both)
 
 
 ```
-
+make predictions on unseen data
 ```{r}
 
 #make predictions on unseen data
@@ -223,7 +264,7 @@ pred.tree.both <- predict(tree.both, newdata = test_data)
 
 ```
 
-
+##### Accuracy for different type of sampling
 
 ```{r}
 accuracy.meas(test_data$class, pred.tree.rose[,1])
@@ -241,3 +282,13 @@ accuracy.meas(test_data$class, pred.tree.under[,1])
 accuracy.meas(test_data$class, pred.tree.both[,1])
 ```
 
+#### Some more operations to perform -
+
+1. Outlier removal from contineous variables.
+
+2. Check if data is linearly seperable, if yes then try loggistic regression.
+
+3. Remove sparcity of binary data using Dimention Reduction Techniques and apply classifier on Reduced dimention.
+
+## To be continued......
+### This is not the end, accuracy of model can be improved by trying different types of model and hyperparameter tuning, with different classification algorithms.
