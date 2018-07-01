@@ -1,0 +1,619 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+```{r}
+library(readr)
+library(dplyr)
+library(glmnet)
+
+```
+
+```{r}
+activities = read.table("activity_labels.txt", sep = "", col.names = c("Id", "activity"))
+activityLabels = as.character(activities$activity)
+features = read.table("features.txt", sep = "", col.names = c("Id", "feature"))
+attributeNames = features$feature
+```
+
+```{r}
+cat("Total no of features - ", length(attributeNames))
+```
+
+```{r}
+attributeNames
+```
+
+```{r}
+# Load the training dataset
+# Add training data column names from features
+
+train <- tbl_df(read.table("./train/X_train.txt"))
+colnames(train) <- attributeNames #features$feature.Variable
+
+
+# Load the test dataset
+# Add test data column names from features
+
+test <- tbl_df(read.table("./test/X_test.txt"))
+colnames(test) <- attributeNames  # features$feature.Variable
+merged <- rbind(train, test)
+```
+
+```{r}
+# Add subject data, and activity data to the training dataset
+train <- cbind(
+        tbl_df(read.table("./train/subject_train.txt")),
+        tbl_df(read.table("./train/y_train.txt")),
+        Dataset.Partition = c("Training"),
+        train)
+
+# Add subject data, and activity data to the test dataset
+test <- cbind(
+    tbl_df(read.table("./test/subject_test.txt")), 
+    tbl_df(read.table("./test/y_test.txt")),
+    Dataset.Partition = c("Test"),
+    test)
+
+```
+
+```{r}
+selected_measures <- grepl('-(mean|std)\\(',colnames(merged))
+data_set <- subset(merged, select=selected_measures)
+merged <- subset(merged, select=selected_measures)
+dim(merged)
+```
+
+```{r}
+head(merged)
+```
+
+```{r}
+colnames(merged) <- gsub("mean", ".Mean.", colnames(merged))
+colnames(merged) <- gsub("std", ".Std.", colnames(merged))
+colnames(merged) <- gsub("^t", "Time.", colnames(merged))
+colnames(merged) <- gsub("\\.t", ".Time.", colnames(merged))
+colnames(merged) <- gsub("^f", "Frequency.", colnames(merged))
+colnames(merged) <- gsub("\\.f", ".Frequency.", colnames(merged))
+colnames(merged) <- gsub("\\(\\)", "", colnames(merged))
+colnames(merged) <- gsub("-", "", colnames(merged))
+colnames(merged) <- gsub("\\.\\.", ".", colnames(merged))
+colnames(merged) <- gsub("\\.\\.", ".", colnames(merged))
+colnames(merged) <- gsub("\\.$", "", colnames(merged))
+colnames(merged) <- gsub("BodyBody", "Body.", colnames(merged))
+colnames(merged) <- gsub("^angle\\.", "Angle.", colnames(merged))
+colnames(merged) <- gsub("Gyro", ".Gyro", colnames(merged))
+colnames(merged) <- gsub("Acc", ".Acc", colnames(merged))
+colnames(merged) <- gsub("Jerk", ".Jerk", colnames(merged))
+colnames(merged) <- gsub("Mag", ".Mag", colnames(merged))
+colnames(merged) <- gsub("^", "MeanOf.", colnames(merged))
+colnames(merged) <- gsub("(^|[\\.])([[:alpha:]])", "\\1\\U\\2", colnames(merged), perl=TRUE)
+
+```
+
+```{r}
+activities_train <- read.table("./train/y_train.txt")
+activities_test <- read.table("./test/y_test.txt")
+activities <- rbind(activities_train,activities_test)[,1]
+labels <- c("WALKING", "WALKING_UPSTAIRS", "WALKING_DOWNSTAIRS",
+            "SITTING", "STANDING", "LAYING")
+activities <- labels[activities]
+merged <- cbind(Activity = activities,merged)
+
+```
+
+```{r}
+subjects_train <- read.table("train/subject_train.txt")
+subjects_test <- read.table("test/subject_test.txt")
+subjects <- rbind(subjects_train,subjects_test)[,1]
+merged <- cbind(Subject = subjects,merged)
+merged[1:4,1:5]
+```
+
+```{r}
+library('dplyr')
+average_data_set <- merged %>%
+    group_by(Subject,Activity) %>%
+    summarise_all(funs(mean))
+```
+
+```{r}
+average_data_set
+```
+
+```{r}
+write.table(average_data_set,row.name = FALSE,file = "tidy_data_set.txt")  
+```
+
+```{r}
+rm(average_data_set,train, test, merged)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+Read training Data
+```{r}
+train_X = read.table("./train/X_train.txt", sep="", col.names=attributeNames)
+train_y <- read.table("./train/y_train.txt", sep="\n")
+names(train_y) = "Activity"
+#combining features and activity label
+train_y$Activity = as.factor(train_y$Activity)
+#levels(train_y$Activity) = activityLabels
+trainSubjects = read.table("./train/subject_train.txt", sep = "")
+names(trainSubjects) = "subject"
+trainSubjects$subject = as.factor(trainSubjects$subject)
+
+train <- cbind(train_X, trainSubjects, train_y)
+train_labels <- train$Activity
+```
+
+```{r}
+dim(train)
+```
+
+```{r}
+test_X = read.table("./test/X_test.txt", sep="", col.names=attributeNames)
+test_y <- read.table("./test/y_test.txt", sep="\n")
+names(test_y) = "Activity"
+
+test_y$Activity = as.factor(test_y$Activity)
+#levels(test_y$Activity) = activityLabels
+testSubjects = read.table("./test/subject_test.txt", sep = "")
+names(testSubjects) = "subject"
+testSubjects$subject = as.factor(testSubjects$subject)
+
+#combined features and acitvity
+test <- cbind(test_X, testSubjects, test_y)
+```
+
+```{r}
+dim(test)
+```
+
+```{r}
+head(train)
+```
+
+```{r}
+
+```
+Dataset Exploration
+```{r}
+#summary(train)
+```
+
+```{r}
+summary(train$subject)
+```
+
+```{r}
+#summary(test)
+```
+
+```{r}
+summary(test$subject)
+```
+
+```{r}
+cat_var <- names(train)[which(sapply(train, is.character))]
+num_var <- names(train)[which(sapply(train, is.numeric))]
+```
+
+```{r}
+cat(paste0("Total number of numeric variables: ", length(num_var)))
+```
+
+```{r}
+train$Partition = "Train"
+test$Partition = "Test"
+
+library(ggplot2)
+all = rbind(train,test)
+
+all$Partition = as.factor(all$Partition)
+qplot(data = all, x = subject, fill = Partition)
+```
+
+```{r}
+qplot(data = all , x = subject, fill = Activity)
+```
+
+```{r}
+dim(test)
+```
+
+```{r}
+dim(train)
+cols = colnames(train)
+cols[561]
+cols[562]
+cols[563]
+cols[564]
+```
+
+```{r}
+train_labels
+```
+
+Dataset Subset
+```{r}
+# Create a calibration and training set from the main training set
+set.seed(42)
+idx = sample(c(TRUE, FALSE), nrow(train), replace = TRUE, prob = c(0.8, 0.2))
+
+X_train = subset(train[,-564], idx)
+y_train  = subset(train_labels, idx)
+
+X_val = subset(train[,-564], !idx)
+y_val = subset(train_labels, !idx)
+```
+
+```{r}
+dim(X_train)
+length(y_train)
+```
+## Lasso Feature Selection
+With over 500 features, it's important to reduce the feature-set to avoid overfitting and to create a sensical model. The more features you have, the easier it is to create a model that trains well, but may not do so well with test data. To learn more about these problems, checkout the bias-variance trade-off and the curse of dimensionality.
+Lasso selection works by reducing the coefficients of certain features towards (and exactly) 0. The higher the lambda, the faster this will happen. A sufficiently high lamba would set all features to 0, meaning only the coefficient will be used in the model (a simple mean, for example, in regression).
+```{r}
+x <- model.matrix(y_train ~ ., X_train)[,-1]
+dim(x)
+```
+
+```{r}
+fit = glmnet(x, y_train, family = "multinomial", type.multinomial = "grouped")
+```
+
+
+
+```{r}
+rm(fit)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+activities = read.table("activity_labels.txt", sep = "", col.names = c("Id", "activity"))
+activityLabels = as.character(activities$activity)
+features = read.table("features.txt", sep = "", col.names = c("Id", "feature"))
+attributeNames = features$feature
+```
+
+```{r}
+# Combining the training and testing dataset
+data<-rbind(train,test)
+
+#Applying nameing transformation to entire dataset
+nameVec <- make.names(names(data),unique=TRUE)
+names(data) <- nameVec
+
+dim(data)
+```
+
+```{r}
+train <- data[1:7352,]
+test <- data[-c(1:7352),]
+dim(train)
+```
+
+```{r}
+pc <- prcomp(train[,-c(563)], center=TRUE, scale=TRUE)
+pc.var <- pc$sdev^2
+pc.pvar <- pc.var/sum(pc.var)
+```
+
+```{r}
+plot(cumsum(pc.pvar),xlab="Principal component", ylab="Cumulative Proportion of variance explained",type='b',main="Principal Components proportions",col="red")
+abline(h=0.95)
+abline(v=100)
+```
+
+```{r}
+train.data<-data.frame(activity=train$Activity,pc$x)
+train.data<-train.data[,1:100]
+```
+
+```{r}
+length(pc$x)
+```
+
+```{r}
+length(train$Activity)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+

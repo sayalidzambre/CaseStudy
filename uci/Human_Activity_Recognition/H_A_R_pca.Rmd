@@ -1,0 +1,274 @@
+---
+title: "Human Activity Recognition Using Smartphone"
+output: html_notebook
+---
+
+The Human Activity Recognition database was built from the recordings of 30 study participants performing activities of daily living (ADL) while carrying a waist-mounted smartphone with embedded inertial sensors. The objective is to classify activities into one of the six activities performed.
+
+```{r}
+
+```
+
+The experiments have been carried out with a group of 30 volunteers within an age bracket of 19-48 years. Each person performed six activities (WALKING, WALKING_UPSTAIRS, WALKING_DOWNSTAIRS, SITTING, STANDING, LAYING) wearing a smartphone.
+
+### Attribute information
+
+For each record in the dataset the following is provided:
+
+Triaxial acceleration from the accelerometer (total acceleration) and the estimated body acceleration.
+Triaxial Angular velocity from the gyroscope.
+A 561-feature vector with time and frequency domain variables.
+Its activity label.
+An identifier of the subject who carried out the experiment.
+```{r}
+library(readr)
+library(dplyr)     # For pipe operations
+library(glmnet)    # For Lasso
+library(e1071)   # for SVM
+require(caret)
+```
+
+```{r}
+activities = read.table("./activity_labels.txt", sep = "", col.names = c("Id", "activity"))
+activityLabels = as.character(activities$activity)
+features = read.table("features.txt", sep = "", col.names = c("Id", "feature"))
+attributeNames = features$feature
+```
+
+```{r}
+cat("Total no of features - ", length(attributeNames))
+```
+
+```{r}
+train_X = read.table("./train/X_train.txt", sep="", col.names=attributeNames)
+train_y <- read.table("./train/y_train.txt", sep="\n")
+names(train_y) = "Activity"
+#combining features and activity label
+train_y$Activity = as.factor(train_y$Activity)
+levels(train_y$Activity) = activityLabels
+trainSubjects = read.table("./train/subject_train.txt", sep = "")
+names(trainSubjects) = "subject"
+#trainSubjects$subject = as.factor(trainSubjects$subject)
+
+train <- cbind(train_X, trainSubjects, train_y)
+train_labels <- train$Activity
+rm(train_X, train_y)
+dim(train)
+```
+
+```{r}
+test_X = read.table("./test/X_test.txt", sep="", col.names=attributeNames)
+test_y <- read.table("./test/y_test.txt", sep="\n")
+names(test_y) = "Activity"
+
+test_y$Activity = as.factor(test_y$Activity)
+levels(test_y$Activity) = activityLabels
+testSubjects = read.table("./test/subject_test.txt", sep = "")
+names(testSubjects) = "subject"
+#testSubjects$subject = as.factor(testSubjects$subject)
+
+#combined features and acitvity
+test <- cbind(test_X, testSubjects, test_y)
+rm(test_X, test_y)
+dim(test)
+```
+
+```{r}
+cat_var <- names(train)[which(sapply(train, is.factor))]
+num_var <- names(train)[which(sapply(train, is.numeric))]
+length(num_var)
+length(cat_var)
+cat('categorical variables are -', cat_var)
+```
+
+```{r}
+head(train$Activity)
+```
+
+```{r}
+data<-rbind(train,test)
+cat('does na value exists')
+which(rowSums(is.na(data))==ncol(data))
+```
+
+```{r}
+nameVec <- make.names(names(data),unique=TRUE)
+names(data) <- nameVec
+
+dim(data)
+
+```
+
+```{r}
+train <- data[1:7352,]
+test <- data[-c(1:7352),]
+dim(train)
+```
+
+
+```{r}
+pc <- prcomp(train[,-c(563)], center=TRUE, scale=TRUE)
+pc.var <- pc$sdev^2
+pc.pvar <- pc.var/sum(pc.var)
+```
+
+```{r}
+plot(cumsum(pc.pvar),xlab="No. of Principal component", ylab="Cumulative % of variance explained",type='b',main="Principal Components' Variance %",col="blue")
+abline(h=0.98)
+abline(v=150)
+```
+
+```{r}
+train.data<-data.frame(activity=train$Activity,pc$x)
+train.data<-train.data[,1:100]
+```
+
+```{r}
+dim(train.data)
+```
+
+```{r}
+svm_model <- svm(activity ~ ., data=train.data)
+```
+
+```{r}
+test.data <- predict(pc,newdata=test)
+test.data <- as.data.frame(test.data)
+test.data <- test.data[,1:100]
+```
+
+```{r}
+result<-predict(svm_model,test.data,type="class")
+```
+
+```{r}
+#Generating Confusion Matrix
+test.data$Activity <- test$Activity
+references <- test.data$Activity
+t<-table(references, result)
+t
+```
+
+```{r}
+acc = sum(references == result) / length(references)
+cat(paste0("Accuracy for test dataset is: ", acc*100 ," %"))
+```
+
+```{r}
+
+confusionMatrix(references, result)
+```
+
+```{r}
+
+```
+### Training the SVM model
+Caret package provides train() method for training our data for various algorithms. We just need to pass different parameter values for different algorithms. Before train() method, we will first use trainControl() method. It controls the computational nuances of the train() method.
+```{r}
+
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+set.seed(3233)
+
+svm_Linear <- train(activity ~., data = train.data, method = "svmLinear",
+                 trControl=trctrl,
+                 preProcess = c("center", "scale"),
+                 tuneLength = 10)
+```
+Trained SVM model result
+```{r}
+svm_Linear
+```
+
+```{r}
+
+test_pred <- predict(svm_Linear, newdata = test.data)
+confusionMatrix(test_pred, result )
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+
+grid <- expand.grid(C = c(0,0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2,5))
+set.seed(3233)
+svm_Linear_Grid <- train(activity ~., data = train.data, method = "svmLinear",
+                    trControl=trctrl,
+                    preProcess = c("center", "scale"),
+                    tuneGrid = grid,
+                    tuneLength = 10)
+
+svm_Linear_Grid
+
+```
+
+```{r}
+plot(svm_Linear_Grid)
+```
+
+```{r}
+
+test_pred_grid <- predict(svm_Linear_Grid, newdata = test.data)
+
+test_pred_grid
+
+```
+
+```{r}
+confusionMatrix(test_pred_grid, result )
+
+```
+SVM Classifier using Non-Linear Kernel
+```{r}
+set.seed(3233)
+svm_Radial <- train(activity ~., data = train.data, method = "svmRadial",
+  trControl=trctrl,
+  preProcess = c("center", "scale"),
+  tuneLength = 10)
+
+svm_Radial
+```
+
+```{r}
+plot(svm_Radial)
+```
+
+```{r}
+
+test_pred_Radial <- predict(svm_Radial, newdata = test.data)
+confusionMatrix(test_pred_Radial, result )
+```
+
+```{r}
+
+```
+
+```{r}
+
+
+grid_radial <- expand.grid(sigma = c(0,0.01, 0.02, 0.025, 0.03, 0.04, 0.05, 0.06, 0.07,0.08, 0.09, 0.1, 0.25, 0.5, 0.75,0.9),
+ C = c(0,0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 5))
+set.seed(3233)
+svm_Radial_Grid <- train(activity ~., data = train.data, method = "svmRadial",
+                    trControl=trctrl,
+                    preProcess = c("center", "scale"),
+                    tuneGrid = grid_radial,
+                    tuneLength = 10)
+
+plot(svm_Radial_Grid)
+
+```
+
+```{r}
+test_pred_Radial_Grid <- predict(svm_Radial_Grid, newdata = test.data)
+
+confusionMatrix(test_pred_Radial_Grid, result )
+```
+
+```{r}
+
+```
+
