@@ -280,7 +280,6 @@ dim(train.data)
 train.data[1,]
 ```
 
-
 ##### Apply basic SVM model on PCA data. As we have multiple Target Variables problem, we will try SVM
 ```{r}
 svm_model <- svm(activity ~ ., data=train.data)
