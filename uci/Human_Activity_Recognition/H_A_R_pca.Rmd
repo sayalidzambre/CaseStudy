@@ -126,7 +126,7 @@ test <- subset(test, select = -c(Partition))
 all$subject = as.factor(all$subject)
 qplot(data = all , x = subject, fill = Activity)
 ```
-#### All classess seems to be equally distributed, which implies this is not a imbalanced classification problem.
+#### All classes seems to be equally distributed, which implies this is not a imbalanced classification problem.
 
 
 
@@ -217,9 +217,9 @@ dim(train)
 ```
 
 ## Principal Component Analysis ( PCA)
-#####Data has high dimentions (561), All of them might not be important features, we can use PCA to reduce dimention of data.
+##### Data has high dimentions (561), As we saw some features are highly correlated, all of them might not be important features, we can use PCA to reduce dimention of data.
 
-#### PCA will help us create Pricincipal components which will cover maximum variance with less number of features.
+#### PCA will help us to create Pricincipal components which will cover maximum variance with less number of features.
 
 
 ```{r}
@@ -233,7 +233,7 @@ pca.pervarriance <- pca.variance / sum(pca.variance)
 
 #### As all of them are numerical variables, alternative to this is -
 
-1. to check correlation between independent variables.
+1. to check correlation between Independent variables.
 
 2. Plot scatter plot between all Independent Variables.
 
@@ -335,7 +335,7 @@ confusionMatrix(test_pred, test_actual )
 
 ##### Lets try to change C hyper Tuning Parameter with linear Kernal, using Grid CV
 
-Change in C will define how much miss-classfication too allow. High C value might tend to Overfitting
+Change in C will define how much miss-classfication to allow. High C value might tend to Overfitting
 
 ```{r}
 
